@@ -396,6 +396,7 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_has_cpu_feature(sljit_s32 feature_type)
 
 	case SLJIT_HAS_CLZ:
 	case SLJIT_HAS_CMOV:
+	case SLJIT_HAS_PREFETCH:
 		return 1;
 
 	default:
@@ -1155,6 +1156,7 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_emit_op0(struct sljit_compiler *compile
 	case SLJIT_DIV_SW:
 		return push_inst(compiler, ((op == SLJIT_DIV_UW ? UDIV : SDIV) ^ inv_bits) | RD(SLJIT_R0) | RN(SLJIT_R0) | RM(SLJIT_R1));
 	case SLJIT_ENDBR:
+	case SLJIT_SKIP_FRAMES_BEFORE_RETURN:
 		return SLJIT_SUCCESS;
 	}
 
@@ -1172,23 +1174,6 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_emit_op1(struct sljit_compiler *compile
 	CHECK(check_sljit_emit_op1(compiler, op, dst, dstw, src, srcw));
 	ADJUST_LOCAL_OFFSET(dst, dstw);
 	ADJUST_LOCAL_OFFSET(src, srcw);
-
-	if (dst == SLJIT_UNUSED && !HAS_FLAGS(op)) {
-		if (op <= SLJIT_MOV_P && (src & SLJIT_MEM)) {
-			SLJIT_ASSERT(reg_map[1] == 0 && reg_map[3] == 2 && reg_map[5] == 4);
-
-			if (op >= SLJIT_MOV_U8 && op <= SLJIT_MOV_S8)
-				dst = 5;
-			else if (op >= SLJIT_MOV_U16 && op <= SLJIT_MOV_S16)
-				dst = 3;
-			else
-				dst = 1;
-
-			/* Signed word sized load is the prefetch instruction. */
-			return emit_op_mem(compiler, WORD_SIZE | SIGNED, dst, src, srcw, TMP_REG1);
-		}
-		return SLJIT_SUCCESS;
-	}
 
 	dst_r = SLOW_IS_REG(dst) ? dst : TMP_REG1;
 
@@ -1344,6 +1329,26 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_emit_op_src(struct sljit_compiler *comp
 			FAIL_IF(emit_op_mem(compiler, WORD_SIZE, TMP_LR, src, srcw, TMP_REG1));
 
 		return push_inst(compiler, RET | RN(TMP_LR));
+	case SLJIT_SKIP_FRAMES_BEFORE_FAST_RETURN:
+		return SLJIT_SUCCESS;
+	case SLJIT_PREFETCH_L1:
+	case SLJIT_PREFETCH_L2:
+	case SLJIT_PREFETCH_L3:
+	case SLJIT_PREFETCH_ONCE:
+		SLJIT_ASSERT(reg_map[1] == 0 && reg_map[3] == 2 && reg_map[5] == 4);
+
+		/* The reg_map[op] should provide the appropriate constant. */
+		if (op == SLJIT_PREFETCH_L1)
+			op = 1;
+		else if (op == SLJIT_PREFETCH_L2)
+			op = 3;
+		else if (op == SLJIT_PREFETCH_L3)
+			op = 5;
+		else
+			op = 2;
+
+		/* Signed word sized load is the prefetch instruction. */
+		return emit_op_mem(compiler, WORD_SIZE | SIGNED, op, src, srcw, TMP_REG1);
 	}
 
 	return SLJIT_SUCCESS;

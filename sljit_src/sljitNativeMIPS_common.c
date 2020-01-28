@@ -688,6 +688,7 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_has_cpu_feature(sljit_s32 feature_type)
 #if (defined SLJIT_MIPS_REV && SLJIT_MIPS_REV >= 1)
 	case SLJIT_HAS_CLZ:
 	case SLJIT_HAS_CMOV:
+	case SLJIT_HAS_PREFETCH:
 		return 1;
 #endif /* SLJIT_MIPS_REV >= 1 */
 
@@ -1288,6 +1289,7 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_emit_op0(struct sljit_compiler *compile
 		return (op >= SLJIT_DIV_UW) ? SLJIT_SUCCESS : push_inst(compiler, MFHI | D(SLJIT_R1), DR(SLJIT_R1));
 #endif /* SLJIT_MIPS_REV >= 6 */
 	case SLJIT_ENDBR:
+	case SLJIT_SKIP_FRAMES_BEFORE_RETURN:
 		return SLJIT_SUCCESS;
 	}
 
@@ -1331,14 +1333,6 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_emit_op1(struct sljit_compiler *compile
 	CHECK(check_sljit_emit_op1(compiler, op, dst, dstw, src, srcw));
 	ADJUST_LOCAL_OFFSET(dst, dstw);
 	ADJUST_LOCAL_OFFSET(src, srcw);
-
-	if (dst == SLJIT_UNUSED && !HAS_FLAGS(op)) {
-#if (defined SLJIT_MIPS_REV && SLJIT_MIPS_REV >= 1)
-		if (op <= SLJIT_MOV_P && (src & SLJIT_MEM))
-			return emit_prefetch(compiler, src, srcw);
-#endif /* SLJIT_MIPS_REV >= 1 */
-		return SLJIT_SUCCESS;
-	}
 
 #if (defined SLJIT_CONFIG_MIPS_64 && SLJIT_CONFIG_MIPS_64)
 	if ((op & SLJIT_I32_OP) && GET_OPCODE(op) >= SLJIT_NOT)
@@ -1482,6 +1476,17 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_emit_op_src(struct sljit_compiler *comp
 
 		FAIL_IF(push_inst(compiler, JR | SA(RETURN_ADDR_REG), UNMOVABLE_INS));
 		return push_inst(compiler, NOP, UNMOVABLE_INS);
+	case SLJIT_SKIP_FRAMES_BEFORE_FAST_RETURN:
+		return SLJIT_SUCCESS;
+	case SLJIT_PREFETCH_L1:
+	case SLJIT_PREFETCH_L2:
+	case SLJIT_PREFETCH_L3:
+	case SLJIT_PREFETCH_ONCE:
+#if (defined SLJIT_MIPS_REV && SLJIT_MIPS_REV >= 1)
+		return emit_prefetch(compiler, src, srcw);
+#else /* SLJIT_MIPS_REV < 1 */
+		return SLJIT_SUCCESS;
+#endif /* SLJIT_MIPS_REV >= 1 */
 	}
 
 	return SLJIT_SUCCESS;

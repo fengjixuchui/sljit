@@ -872,6 +872,9 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_has_cpu_feature(sljit_s32 feature_type)
 
 	case SLJIT_HAS_CLZ:
 	case SLJIT_HAS_CMOV:
+#if (defined SLJIT_CONFIG_ARM_V7 && SLJIT_CONFIG_ARM_V7)
+	case SLJIT_HAS_PREFETCH:
+#endif
 		return 1;
 
 	default:
@@ -1679,6 +1682,7 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_emit_op0(struct sljit_compiler *compile
 		}
 		return SLJIT_SUCCESS;
 	case SLJIT_ENDBR:
+	case SLJIT_SKIP_FRAMES_BEFORE_RETURN:
 		return SLJIT_SUCCESS;
 	}
 
@@ -1693,14 +1697,6 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_emit_op1(struct sljit_compiler *compile
 	CHECK(check_sljit_emit_op1(compiler, op, dst, dstw, src, srcw));
 	ADJUST_LOCAL_OFFSET(dst, dstw);
 	ADJUST_LOCAL_OFFSET(src, srcw);
-
-	if (dst == SLJIT_UNUSED && !HAS_FLAGS(op)) {
-#if (defined SLJIT_CONFIG_ARM_V7 && SLJIT_CONFIG_ARM_V7)
-		if (op <= SLJIT_MOV_P && (src & SLJIT_MEM))
-			return emit_op_mem(compiler, PRELOAD | LOAD_DATA, TMP_PC, src, srcw, TMP_REG1);
-#endif
-		return SLJIT_SUCCESS;
-	}
 
 	switch (GET_OPCODE(op)) {
 	case SLJIT_MOV:
@@ -1800,6 +1796,18 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_emit_op_src(struct sljit_compiler *comp
 			FAIL_IF(emit_op_mem(compiler, WORD_SIZE | LOAD_DATA, TMP_REG2, src, srcw, TMP_REG1));
 
 		return push_inst(compiler, BX | RM(TMP_REG2));
+	case SLJIT_SKIP_FRAMES_BEFORE_FAST_RETURN:
+		return SLJIT_SUCCESS;
+	case SLJIT_PREFETCH_L1:
+	case SLJIT_PREFETCH_L2:
+	case SLJIT_PREFETCH_L3:
+	case SLJIT_PREFETCH_ONCE:
+#if (defined SLJIT_CONFIG_ARM_V7 && SLJIT_CONFIG_ARM_V7)
+		SLJIT_ASSERT(src & SLJIT_MEM);
+		return emit_op_mem(compiler, PRELOAD | LOAD_DATA, TMP_PC, src, srcw, TMP_REG1);
+#else /* !SLJIT_CONFIG_ARM_V7 */
+		return SLJIT_SUCCESS;
+#endif /* SLJIT_CONFIG_ARM_V7 */
 	}
 
 	return SLJIT_SUCCESS;

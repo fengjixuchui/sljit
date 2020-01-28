@@ -213,6 +213,14 @@ extern "C" {
 #if defined(__CET__)
 #define SLJIT_CONFIG_X86_CET 1
 #endif
+#if (defined SLJIT_CONFIG_X86_CET && SLJIT_CONFIG_X86_CET)
+#if defined(__GNUC__)
+#if !defined (__SHSTK__)
+#error "-mshstk is needed to compile with -fcf-protection"
+#endif
+#include <x86intrin.h>
+#endif
+#endif
 #endif
 
 /**********************************/
@@ -283,6 +291,11 @@ extern "C" {
 #ifndef SLJIT_UNUSED_ARG
 /* Unused arguments. */
 #define SLJIT_UNUSED_ARG(arg) (void)arg
+#endif
+
+#ifndef SLJIT_UNUSED_VAR
+/* Unused variables. */
+#define SLJIT_UNUSED_VAR(arg) (void)arg
 #endif
 
 /*********************************/

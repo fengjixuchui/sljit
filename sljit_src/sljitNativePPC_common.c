@@ -627,6 +627,7 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_has_cpu_feature(sljit_s32 feature_type)
 #endif
 
 	case SLJIT_HAS_CLZ:
+	case SLJIT_HAS_PREFETCH:
 		return 1;
 
 	default:
@@ -1159,6 +1160,7 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_emit_op0(struct sljit_compiler *compile
 		return push_inst(compiler, (op == SLJIT_DIV_UW ? DIVWU : DIVW) | D(SLJIT_R0) | A(SLJIT_R0) | B(SLJIT_R1));
 #endif
 	case SLJIT_ENDBR:
+	case SLJIT_SKIP_FRAMES_BEFORE_RETURN:
 		return SLJIT_SUCCESS;
 	}
 
@@ -1204,13 +1206,6 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_emit_op1(struct sljit_compiler *compile
 	CHECK(check_sljit_emit_op1(compiler, op, dst, dstw, src, srcw));
 	ADJUST_LOCAL_OFFSET(dst, dstw);
 	ADJUST_LOCAL_OFFSET(src, srcw);
-
-	if (dst == SLJIT_UNUSED && !HAS_FLAGS(op)) {
-		if (op <= SLJIT_MOV_P && (src & SLJIT_MEM))
-			return emit_prefetch(compiler, src, srcw);
-
-		return SLJIT_SUCCESS;
-	}
 
 	op = GET_OPCODE(op);
 	if ((src & SLJIT_IMM) && srcw == 0)
@@ -1555,6 +1550,13 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_emit_op_src(struct sljit_compiler *comp
 		}
 
 		return push_inst(compiler, BLR);
+	case SLJIT_SKIP_FRAMES_BEFORE_FAST_RETURN:
+		return SLJIT_SUCCESS;
+	case SLJIT_PREFETCH_L1:
+	case SLJIT_PREFETCH_L2:
+	case SLJIT_PREFETCH_L3:
+	case SLJIT_PREFETCH_ONCE:
+		return emit_prefetch(compiler, src, srcw);
 	}
 
 	return SLJIT_SUCCESS;

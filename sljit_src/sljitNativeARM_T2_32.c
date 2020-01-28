@@ -480,6 +480,7 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_has_cpu_feature(sljit_s32 feature_type)
 
 	case SLJIT_HAS_CLZ:
 	case SLJIT_HAS_CMOV:
+	case SLJIT_HAS_PREFETCH:
 		return 1;
 
 	default:
@@ -1329,6 +1330,7 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_emit_op0(struct sljit_compiler *compile
 		return SLJIT_SUCCESS;
 #endif /* __ARM_FEATURE_IDIV || __ARM_ARCH_EXT_IDIV__ */
 	case SLJIT_ENDBR:
+	case SLJIT_SKIP_FRAMES_BEFORE_RETURN:
 		return SLJIT_SUCCESS;
 	}
 
@@ -1346,13 +1348,6 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_emit_op1(struct sljit_compiler *compile
 	CHECK(check_sljit_emit_op1(compiler, op, dst, dstw, src, srcw));
 	ADJUST_LOCAL_OFFSET(dst, dstw);
 	ADJUST_LOCAL_OFFSET(src, srcw);
-
-	if (dst == SLJIT_UNUSED && !HAS_FLAGS(op)) {
-		/* Since TMP_PC has index 15, IS_2_LO_REGS and IS_3_LO_REGS checks always fail. */
-		if (op <= SLJIT_MOV_P && (src & SLJIT_MEM))
-			return emit_op_mem(compiler, PRELOAD, TMP_PC, src, srcw, TMP_REG1);
-		return SLJIT_SUCCESS;
-	}
 
 	dst_r = SLOW_IS_REG(dst) ? dst : TMP_REG1;
 
@@ -1494,6 +1489,13 @@ SLJIT_API_FUNC_ATTRIBUTE sljit_s32 sljit_emit_op_src(struct sljit_compiler *comp
 			FAIL_IF(emit_op_mem(compiler, WORD_SIZE, TMP_REG2, src, srcw, TMP_REG2));
 
 		return push_inst16(compiler, BX | RN3(TMP_REG2));
+	case SLJIT_SKIP_FRAMES_BEFORE_FAST_RETURN:
+		return SLJIT_SUCCESS;
+	case SLJIT_PREFETCH_L1:
+	case SLJIT_PREFETCH_L2:
+	case SLJIT_PREFETCH_L3:
+	case SLJIT_PREFETCH_ONCE:
+		return emit_op_mem(compiler, PRELOAD, TMP_PC, src, srcw, TMP_REG1);
 	}
 
 	return SLJIT_SUCCESS;
