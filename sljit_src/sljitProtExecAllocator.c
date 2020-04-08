@@ -96,10 +96,9 @@ struct chunk_header {
 #endif
 #endif
 
+#if !(defined(__NetBSD__) && defined(MAP_REMAPDUP))
 int mkostemp(char *template, int flags);
-#if !defined(__NetBSD__)
 char *secure_getenv(const char *name);
-#endif
 
 static SLJIT_INLINE int create_tempfile(void)
 {
@@ -204,6 +203,36 @@ static SLJIT_INLINE struct chunk_header* alloc_chunk(sljit_uw size)
 	retval->fd = fd;
 	return retval;
 }
+#else
+static SLJIT_INLINE struct chunk_header* alloc_chunk(sljit_uw size)
+{
+	struct chunk_header *retval;
+	void *maprx;
+
+	retval = (struct chunk_header *)mmap(NULL, size,
+			PROT_MPROTECT(PROT_EXEC|PROT_WRITE|PROT_READ),
+			MAP_ANON, -1, 0);
+
+	if (retval == MAP_FAILED)
+		return NULL;
+
+	maprx = mremap(retval, size, NULL, size, MAP_REMAPDUP);
+	if (maprx == MAP_FAILED) {
+		munmap((void *)retval, size);
+		return NULL;
+	}
+
+	if (mprotect(retval, size, PROT_READ | PROT_WRITE) == -1 ||
+		mprotect(maprx, size, PROT_READ | PROT_EXEC) == -1) {
+		munmap(maprx, size);
+		munmap((void *)retval, size);
+		return NULL;
+	}
+	retval->executable = maprx;
+	retval->fd = -1;
+	return retval;
+}
+#endif
 
 static SLJIT_INLINE void free_chunk(void *chunk, sljit_uw size)
 {
@@ -212,7 +241,8 @@ static SLJIT_INLINE void free_chunk(void *chunk, sljit_uw size)
 	int fd = header->fd;
 	munmap(header->executable, size);
 	munmap((void *)header, size);
-	close(fd);
+	if (fd != -1)
+		close(fd);
 }
 
 /* --------------------------------------------------------------------- */
@@ -392,7 +422,9 @@ SLJIT_API_FUNC_ATTRIBUTE void sljit_free_exec(void* ptr)
 		if (total_size - free_block->size > (allocated_size * 3 / 2)) {
 			total_size -= free_block->size;
 			sljit_remove_free_block(free_block);
-			free_chunk(free_block, free_block->size + sizeof(struct block_header));
+			free_chunk(free_block, free_block->size +
+				sizeof(struct chunk_header) +
+				sizeof(struct block_header));
 		}
 	}
 
@@ -413,7 +445,9 @@ SLJIT_API_FUNC_ATTRIBUTE void sljit_free_unused_memory_exec(void)
 				AS_BLOCK_HEADER(free_block, free_block->size)->size == 1) {
 			total_size -= free_block->size;
 			sljit_remove_free_block(free_block);
-			free_chunk(free_block, free_block->size + sizeof(struct block_header));
+			free_chunk(free_block, free_block->size +
+				sizeof(struct chunk_header) +
+				sizeof(struct block_header));
 		}
 		free_block = next_free_block;
 	}

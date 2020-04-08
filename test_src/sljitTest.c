@@ -5479,6 +5479,8 @@ static void test57(void)
 	executable_code code;
 	struct sljit_compiler* compiler = sljit_create_compiler(NULL);
 	struct sljit_label* labels[5];
+	sljit_p addr[5];
+	int i;
 
 	if (verbose)
 		printf("Run test57\n");
@@ -5507,21 +5509,25 @@ static void test57(void)
 
 	code.code = sljit_generate_code(compiler);
 	CHECK(compiler);
+
+	for (i = 0; i < 5; i++)
+		addr[i] = sljit_get_label_addr(labels[i]);
+
 	sljit_free_compiler(compiler);
 
 	code.func0();
 
 	if (sljit_has_cpu_feature(SLJIT_HAS_PREFETCH)) {
-		FAILED(sljit_get_label_addr(labels[0]) == sljit_get_label_addr(labels[1]), "test57 case 1 failed\n");
-		FAILED(sljit_get_label_addr(labels[1]) == sljit_get_label_addr(labels[2]), "test57 case 2 failed\n");
-		FAILED(sljit_get_label_addr(labels[2]) == sljit_get_label_addr(labels[3]), "test57 case 3 failed\n");
-		FAILED(sljit_get_label_addr(labels[3]) == sljit_get_label_addr(labels[4]), "test57 case 4 failed\n");
+		FAILED(addr[0] == addr[1], "test57 case 1 failed\n");
+		FAILED(addr[1] == addr[2], "test57 case 2 failed\n");
+		FAILED(addr[2] == addr[3], "test57 case 3 failed\n");
+		FAILED(addr[3] == addr[4], "test57 case 4 failed\n");
 	}
 	else {
-		FAILED(sljit_get_label_addr(labels[0]) != sljit_get_label_addr(labels[1]), "test57 case 1 failed\n");
-		FAILED(sljit_get_label_addr(labels[1]) != sljit_get_label_addr(labels[2]), "test57 case 2 failed\n");
-		FAILED(sljit_get_label_addr(labels[2]) != sljit_get_label_addr(labels[3]), "test57 case 3 failed\n");
-		FAILED(sljit_get_label_addr(labels[3]) != sljit_get_label_addr(labels[4]), "test57 case 4 failed\n");
+		FAILED(addr[0] != addr[1], "test57 case 1 failed\n");
+		FAILED(addr[1] != addr[2], "test57 case 2 failed\n");
+		FAILED(addr[2] != addr[3], "test57 case 3 failed\n");
+		FAILED(addr[3] != addr[4], "test57 case 4 failed\n");
 	}
 
 	sljit_free_code(code.code);
@@ -5956,6 +5962,12 @@ static void test60(void)
 	SLJIT_ASSERT(sljit_emit_mem(compiler, SLJIT_MOV_S8 | SLJIT_MEM_SUPP | SLJIT_MEM_PRE, SLJIT_R0, SLJIT_MEM2(SLJIT_R1, SLJIT_R2), 1) == SLJIT_ERR_UNSUPPORTED);
 	SLJIT_ASSERT(sljit_emit_mem(compiler, SLJIT_MOV_S8 | SLJIT_MEM_SUPP | SLJIT_MEM_POST, SLJIT_R0, SLJIT_MEM2(SLJIT_R1, SLJIT_R2), 1) == SLJIT_ERR_UNSUPPORTED);
 
+#if (defined SLJIT_CONFIG_ARM_THUMB2 && SLJIT_CONFIG_ARM_THUMB2) || (defined SLJIT_CONFIG_ARM_64 && SLJIT_CONFIG_ARM_64)
+	/* TODO: at least for ARM (both V5 and V7) the range below needs further fixing */
+	SLJIT_ASSERT(sljit_emit_mem(compiler, SLJIT_MOV | SLJIT_MEM_SUPP | SLJIT_MEM_PRE, SLJIT_R1, SLJIT_MEM1(SLJIT_R0), 256) == SLJIT_ERR_UNSUPPORTED);
+	SLJIT_ASSERT(sljit_emit_mem(compiler, SLJIT_MOV | SLJIT_MEM_SUPP | SLJIT_MEM_POST, SLJIT_R1, SLJIT_MEM1(SLJIT_R0), -257) == SLJIT_ERR_UNSUPPORTED);
+#endif
+
 	sljit_emit_return(compiler, SLJIT_UNUSED, 0, 0);
 
 	code.code = sljit_generate_code(compiler);
@@ -6104,6 +6116,12 @@ static void test61(void)
 
 	SLJIT_ASSERT(sljit_emit_fmem(compiler, SLJIT_MOV_F64 | SLJIT_MEM_SUPP | SLJIT_MEM_POST, SLJIT_FR0, SLJIT_MEM2(SLJIT_R1, SLJIT_R2), 0) == SLJIT_ERR_UNSUPPORTED);
 	SLJIT_ASSERT(sljit_emit_fmem(compiler, SLJIT_MOV_F32 | SLJIT_MEM_SUPP | SLJIT_MEM_STORE | SLJIT_MEM_POST, SLJIT_FR0, SLJIT_MEM2(SLJIT_R1, SLJIT_R2), 0) == SLJIT_ERR_UNSUPPORTED);
+
+#if (defined SLJIT_CONFIG_ARM_64 && SLJIT_CONFIG_ARM_64)
+	/* TODO: at least for ARM (both V5 and V7) the range below needs further fixing */
+	SLJIT_ASSERT(sljit_emit_fmem(compiler, SLJIT_MOV_F64 | SLJIT_MEM_SUPP | SLJIT_MEM_PRE, SLJIT_FR0, SLJIT_MEM1(SLJIT_R0), 256) == SLJIT_ERR_UNSUPPORTED);
+	SLJIT_ASSERT(sljit_emit_fmem(compiler, SLJIT_MOV_F64 | SLJIT_MEM_SUPP | SLJIT_MEM_POST, SLJIT_FR0, SLJIT_MEM1(SLJIT_R0), -257) == SLJIT_ERR_UNSUPPORTED);
+#endif
 
 	sljit_emit_return(compiler, SLJIT_UNUSED, 0, 0);
 
