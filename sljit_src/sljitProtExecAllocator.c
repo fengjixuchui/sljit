@@ -83,6 +83,7 @@ struct chunk_header {
        as it only uses local variables
 */
 
+#include <sys/stat.h>
 #include <fcntl.h>
 
 #ifndef O_NOATIME
@@ -97,7 +98,18 @@ struct chunk_header {
 
 #if !(defined(__NetBSD__) && defined(MAP_REMAPDUP))
 int mkostemp(char *template, int flags);
+
+#ifdef __NetBSD__
+/*
+ * this is a workaround for NetBSD < 8 that lacks a system provided
+ * secure_getenv function.
+ * ideally this should never be used, as the standard allocator is
+ * a preferred option for those systems and should be used instead.
+ */
+#define secure_getenv(name) issetugid() ?  NULL : getenv(name)
+#else
 char *secure_getenv(const char *name);
+#endif
 
 static SLJIT_INLINE int create_tempfile(void)
 {
@@ -107,12 +119,17 @@ static SLJIT_INLINE int create_tempfile(void)
 	size_t tmp_name_len;
 	char *dir;
 	size_t len;
+#if defined(SLJIT_SINGLE_THREADED) && SLJIT_SINGLE_THREADED
+	mode_t mode;
+#endif
 
 #ifdef HAVE_MEMFD_CREATE
 	/* this is a GNU extension, make sure to use -D_GNU_SOURCE */
 	fd = memfd_create("sljit", MFD_CLOEXEC);
-	if (fd != -1)
+	if (fd != -1) {
+		fchmod(fd, 0);
 		return fd;
+	}
 #endif
 
 #ifdef P_tmpdir
@@ -131,11 +148,8 @@ static SLJIT_INLINE int create_tempfile(void)
 	tmp_name_len = 4;
 #endif
 
-#if defined(__NetBSD__)
-	dir = getenv("TMPDIR");
-#else
 	dir = secure_getenv("TMPDIR");
-#endif
+
 	if (dir) {
 		len = strlen(dir);
 		if (len > 0 && len < sizeof(tmp_name)) {
@@ -152,7 +166,7 @@ static SLJIT_INLINE int create_tempfile(void)
 	}
 
 #ifdef O_TMPFILE
-	fd = open(tmp_name, O_TMPFILE | O_EXCL | O_RDWR | O_NOATIME | O_CLOEXEC, S_IRUSR | S_IWUSR);
+	fd = open(tmp_name, O_TMPFILE | O_EXCL | O_RDWR | O_NOATIME | O_CLOEXEC, 0);
 	if (fd != -1)
 		return fd;
 #endif
@@ -163,10 +177,18 @@ static SLJIT_INLINE int create_tempfile(void)
 	}
 
 	strcpy(tmp_name + tmp_name_len, "/XXXXXX");
+#if defined(SLJIT_SINGLE_THREADED) && SLJIT_SINGLE_THREADED
+	mode = umask(0777);
+#endif
 	fd = mkostemp(tmp_name, O_CLOEXEC | O_NOATIME);
+#if defined(SLJIT_SINGLE_THREADED) && SLJIT_SINGLE_THREADED
+	umask(mode);
+#else
+	fchmod(fd, 0);
+#endif
 
 	if (fd == -1)
-		return fd;
+		return -1;
 
 	if (unlink(tmp_name)) {
 		close(fd);
@@ -212,31 +234,29 @@ static SLJIT_INLINE struct chunk_header* alloc_chunk(sljit_uw size)
 static SLJIT_INLINE struct chunk_header* alloc_chunk(sljit_uw size)
 {
 	struct chunk_header *retval;
-	void *maprx;
 
 	retval = (struct chunk_header *)mmap(NULL, size,
-			PROT_MPROTECT(PROT_EXEC|PROT_WRITE|PROT_READ),
-			MAP_ANON, -1, 0);
+			PROT_READ | PROT_WRITE | PROT_MPROTECT(PROT_EXEC),
+			MAP_ANON | MAP_SHARED, -1, 0);
 
 	if (retval == MAP_FAILED)
 		return NULL;
 
-	maprx = mremap(retval, size, NULL, size, MAP_REMAPDUP);
-	if (maprx == MAP_FAILED) {
+	retval->executable = mremap(retval, size, NULL, size, MAP_REMAPDUP);
+	if (retval->executable == MAP_FAILED) {
 		munmap((void *)retval, size);
 		return NULL;
 	}
 
-	if (mprotect(retval, size, PROT_READ | PROT_WRITE) == -1 ||
-		mprotect(maprx, size, PROT_READ | PROT_EXEC) == -1) {
-		munmap(maprx, size);
+	if (mprotect(retval->executable, size, PROT_READ | PROT_EXEC) == -1) {
+		munmap(retval->executable, size);
 		munmap((void *)retval, size);
 		return NULL;
 	}
-	retval->executable = maprx;
+
 	return retval;
 }
-#endif
+#endif /* NetBSD >= 8 */
 
 static SLJIT_INLINE void free_chunk(void *chunk, sljit_uw size)
 {
