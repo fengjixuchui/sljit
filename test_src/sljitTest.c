@@ -148,11 +148,6 @@ static void test_exec_allocator(void)
 	FREE_EXEC(ptr3);
 	FREE_EXEC(ptr1);
 	FREE_EXEC(ptr2);
-#if (defined SLJIT_UTIL_GLOBAL_LOCK && SLJIT_UTIL_GLOBAL_LOCK)
-	/* Just call the global locks. */
-	sljit_grab_lock();
-	sljit_release_lock();
-#endif
 
 #if (defined SLJIT_EXECUTABLE_ALLOCATOR && SLJIT_EXECUTABLE_ALLOCATOR)
 	sljit_free_unused_memory_exec();
@@ -6298,8 +6293,7 @@ static void test63(void)
 
 static void test64(void)
 {
-	/* Test put label with absolute label addresses
-	   This code is not thread safe and uses a patched execalloc. */
+	/* Test put label with absolute label addresses */
 	executable_code code;
 	sljit_uw malloc_addr;
 	struct sljit_label label[4];
@@ -6322,7 +6316,7 @@ static void test64(void)
 	malloc_addr = (sljit_uw)SLJIT_MALLOC_EXEC(1024, NULL);
 
 	if (!malloc_addr) {
-		printf("Cannot allocate executable memory.");
+		printf("Cannot allocate executable memory\n");
 		return;
 	}
 

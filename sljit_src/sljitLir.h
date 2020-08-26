@@ -70,13 +70,11 @@
       - pass --smc-check=all argument to valgrind, since JIT is a "self-modifying code"
 */
 
-#if (defined SLJIT_HAVE_SLJIT_CONFIG_PRE_H && SLJIT_HAVE_SLJIT_CONFIG_PRE_H)
+#if (defined SLJIT_HAVE_CONFIG_PRE && SLJIT_HAVE_CONFIG_PRE)
 #include "sljitConfigPre.h"
-#endif /* SLJIT_HAVE_SLJIT_CONFIG_PRE_H */
+#endif /* SLJIT_HAVE_CONFIG_PRE */
 
-#if !(defined SLJIT_NO_DEFAULT_CONFIG && SLJIT_NO_DEFAULT_CONFIG)
 #include "sljitConfig.h"
-#endif /* SLJIT_NO_DEFAULT_CONFIG */
 
 /* The following header file defines useful macros for fine tuning
 sljit based code generators. They are listed in the beginning
@@ -84,9 +82,9 @@ of sljitConfigInternal.h */
 
 #include "sljitConfigInternal.h"
 
-#if (defined SLJIT_HAVE_SLJIT_CONFIG_POST_H && SLJIT_HAVE_SLJIT_CONFIG_POST_H)
+#if (defined SLJIT_HAVE_CONFIG_POST && SLJIT_HAVE_CONFIG_POST)
 #include "sljitConfigPost.h"
-#endif /* SLJIT_HAVE_SLJIT_CONFIG_POST_H */
+#endif /* SLJIT_HAVE_CONFIG_POST */
 
 #ifdef __cplusplus
 extern "C" {
@@ -1415,12 +1413,6 @@ SLJIT_API_FUNC_ATTRIBUTE const char* sljit_get_platform_name(void);
 
 /* Portable helper function to get an offset of a member. */
 #define SLJIT_OFFSETOF(base, member) ((sljit_sw)(&((base*)0x10)->member) - 0x10)
-
-#if (defined SLJIT_UTIL_GLOBAL_LOCK && SLJIT_UTIL_GLOBAL_LOCK)
-/* This global lock is useful to compile common functions. */
-SLJIT_API_FUNC_ATTRIBUTE void SLJIT_FUNC sljit_grab_lock(void);
-SLJIT_API_FUNC_ATTRIBUTE void SLJIT_FUNC sljit_release_lock(void);
-#endif
 
 #if (defined SLJIT_UTIL_STACK && SLJIT_UTIL_STACK)
 
